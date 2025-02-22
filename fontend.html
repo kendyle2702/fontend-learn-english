@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv8 Inference Streaming</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+        }
+        select, button {
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Camera Live & Inference với YOLOv8</h2>
+
+    <label for="cameraSelect">Chọn Camera:</label>
+    <!-- <p id="log"></p> -->
+    <select id="cameraSelect"></select>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <img id="result" alt="Kết quả inference" style="display:block; margin-top:10px; border: 1px solid #ccc; max-width:100%;">
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const resultImg = document.getElementById('result');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const ctx = canvas.getContext('2d');
+
+        const log = document.getElementById('log');
+
+        let currentStream = null;
+        let ws = null;
+
+        // ✅ Kết nối WebSocket đến backend FastAPI
+        function connectWebSocket() {
+            ws = new WebSocket("wss://192.168.1.44:8000/ws");
+
+            ws.onopen = () => console.log("✅ WebSocket Connected");
+
+            ws.onerror = (error) => {console.error("❌ WebSocket Error:", error);
+                alert("Không thể kết nối đến backend. Vui lòng thử lại sau!");
+            };
+
+            // Nhận kết quả inference từ backend
+            ws.onmessage = (event) => {
+                resultImg.src = "data:image/jpeg;base64," + event.data;
+                // log.append("🔥 Inference: " + event.data + "\n");
+            };
+        }
+
+        // ✅ Lấy danh sách camera và ưu tiên camera sau trên điện thoại
+        async function getCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+                cameraSelect.innerHTML = "";
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+
+                // Chọn camera sau nếu có
+                const backCamera = videoDevices.find(device => device.label.toLowerCase().includes("back"));
+                startCamera(backCamera ? backCamera.deviceId : videoDevices[0]?.deviceId);
+            } catch (error) {
+                console.error("❌ Lỗi khi lấy danh sách camera:", error);
+                alert("Không thể lấy danh sách camera.");
+            }
+        }
+
+        // ✅ Mở camera
+        async function startCamera(deviceId) {
+            // Dừng stream hiện tại trước khi mở stream mới
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const constraints = {
+                    video: {
+                        deviceId: deviceId ? { exact: deviceId } : undefined,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                currentStream = stream;
+
+                // ✅ Khi camera sẵn sàng, gửi frame liên tục
+                video.onloadedmetadata = () => sendFrame();
+
+            } catch (error) {
+                console.error("❌ Lỗi khi truy cập camera:", error);
+                alert("Không thể truy cập camera. Kiểm tra quyền hoặc thử trình duyệt khác!");
+            }
+        }
+
+        // ✅ Gửi frame lên backend liên tục
+        function sendFrame() {
+            if (ws.readyState === WebSocket.OPEN) {
+                // log.append("🔥 Inference: " + video.videoWidth + "\n");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                const frame = canvas.toDataURL("image/jpeg", 0.7).split(',')[1];
+                ws.send(frame);
+            }
+            requestAnimationFrame(sendFrame);
+        }
+
+        // ✅ Khi chọn camera khác, đổi camera
+        cameraSelect.addEventListener("change", () => {
+            startCamera(cameraSelect.value);
+        });
+
+        // ✅ Kiểm tra quyền camera & lấy danh sách
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(() => {
+                getCameras();
+                connectWebSocket();
+            })
+            .catch(error => {
+                console.error("❌ Lỗi quyền camera:", error);
+                alert("Bạn cần cấp quyền truy cập camera trong cài đặt trình duyệt.");
+            });
+
+    </script>
+
+</body>
+</html>
