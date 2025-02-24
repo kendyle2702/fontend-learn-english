@@ -55,8 +55,8 @@
 
         let currentStream = null;
         let ws = null;
-        let isProcessing = false; // Tránh gửi frame khi chưa có phản hồi
-        let animationFrameId = null; // ID của requestAnimationFrame để dừng vòng lặp
+        let isProcessing = false;
+        let animationFrameId = null;
 
         function connectWebSocket() {
             ws = new WebSocket("wss://27c2-115-74-210-164.ngrok-free.app/ws");
@@ -71,7 +71,7 @@
             // Nhận kết quả inference từ backend
             ws.onmessage = (event) => {
                 resultImg.src = "data:image/jpeg;base64," + event.data;
-                isProcessing = false; // Cho phép gửi frame mới
+                isProcessing = false;
             };
         }
 
@@ -81,15 +81,26 @@
                 const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
                 cameraSelect.innerHTML = "";
+                let defaultCameraId = null;
+
                 videoDevices.forEach((device, index) => {
                     const option = document.createElement('option');
                     option.value = device.deviceId;
                     option.text = device.label || `Camera ${index + 1}`;
                     cameraSelect.appendChild(option);
+
+                    // Mặc định chọn camera trước nếu có, nếu không chọn camera đầu tiên
+                    if (device.label.toLowerCase().includes("front")) {
+                        defaultCameraId = device.deviceId;
+                    }
                 });
 
-                const backCamera = videoDevices.find(device => device.label.toLowerCase().includes("back"));
-                startCamera(backCamera ? backCamera.deviceId : videoDevices[0]?.deviceId);
+                // Nếu không tìm thấy camera trước, chọn camera đầu tiên
+                defaultCameraId = defaultCameraId || videoDevices[0]?.deviceId;
+                cameraSelect.value = defaultCameraId;
+
+                // Bắt đầu camera mặc định
+                startCamera(defaultCameraId);
             } catch (error) {
                 console.error("❌ Lỗi khi lấy danh sách camera:", error);
                 alert("Không thể lấy danh sách camera.");
@@ -115,8 +126,8 @@
                 currentStream = stream;
 
                 video.onloadedmetadata = () => {
-                    if (animationFrameId) cancelAnimationFrame(animationFrameId); // Dừng vòng lặp cũ
-                    sendFrameLoop(); // Bắt đầu vòng lặp mới
+                    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                    sendFrameLoop();
                 };
 
             } catch (error) {
