@@ -10,7 +10,7 @@
             text-align: center;
             margin: 20px;
         }
-        /* Ẩn video nhưng vẫn chạy để lấy frame */
+        /* Ẩn video nhưng vẫn hoạt động */
         video {
             position: absolute;
             width: 1px;
@@ -57,7 +57,7 @@
         let ws = null;
         let isProcessing = false;
         let animationFrameId = null;
-        let lastFrameTime = Date.now();  // Theo dõi thời gian gửi frame cuối cùng
+        let isCameraStable = false; // Kiểm tra xem camera đã sẵn sàng chưa
 
         function connectWebSocket() {
             ws = new WebSocket("wss://27c2-115-74-210-164.ngrok-free.app/ws");
@@ -69,11 +69,9 @@
                 alert("Không thể kết nối đến backend. Vui lòng thử lại sau!");
             };
 
-            // Nhận kết quả inference từ backend
             ws.onmessage = (event) => {
                 resultImg.src = "data:image/jpeg;base64," + event.data;
                 isProcessing = false;
-                lastFrameTime = Date.now();
             };
         }
 
@@ -83,26 +81,15 @@
                 const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
                 cameraSelect.innerHTML = "";
-                let defaultCameraId = null;
-
                 videoDevices.forEach((device, index) => {
                     const option = document.createElement('option');
                     option.value = device.deviceId;
                     option.text = device.label || `Camera ${index + 1}`;
                     cameraSelect.appendChild(option);
-
-                    // Mặc định chọn camera trước nếu có, nếu không chọn camera đầu tiên
-                    if (device.label.toLowerCase().includes("front")) {
-                        defaultCameraId = device.deviceId;
-                    }
                 });
 
-                // Nếu không tìm thấy camera trước, chọn camera đầu tiên
-                defaultCameraId = defaultCameraId || videoDevices[0]?.deviceId;
-                cameraSelect.value = defaultCameraId;
-
-                // Bắt đầu camera mặc định
-                startCamera(defaultCameraId);
+                const backCamera = videoDevices.find(device => device.label.toLowerCase().includes("back"));
+                startCamera(backCamera ? backCamera.deviceId : videoDevices[0]?.deviceId);
             } catch (error) {
                 console.error("❌ Lỗi khi lấy danh sách camera:", error);
                 alert("Không thể lấy danh sách camera.");
@@ -110,6 +97,13 @@
         }
 
         async function startCamera(deviceId) {
+            // 🛑 1. Dừng gửi frame khi đổi camera
+            isCameraStable = false; // Đánh dấu camera chưa ổn định
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+
+            // Dừng stream hiện tại trước khi mở stream mới
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
@@ -127,11 +121,11 @@
                 video.srcObject = stream;
                 currentStream = stream;
 
-                // Đợi camera khởi động trước khi gửi frame
+                // ✅ 2. Đợi camera ổn định trước khi gửi frame (1 giây)
                 setTimeout(() => {
-                    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+                    isCameraStable = true;
                     sendFrameLoop();
-                }, 500); // Chờ 500ms để tránh lỗi camera bị đứng
+                }, 1000);
 
             } catch (error) {
                 console.error("❌ Lỗi khi truy cập camera:", error);
@@ -140,29 +134,18 @@
         }
 
         function sendFrame() {
-            // Kiểm tra nếu WebSocket bị mất kết nối, tự động kết nối lại
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.warn("🔄 WebSocket không hoạt động, kết nối lại...");
-                connectWebSocket();
+            // 🛑 3. Chỉ gửi frame nếu camera đã ổn định
+            if (!isCameraStable || ws.readyState !== WebSocket.OPEN || isProcessing) {
                 return;
             }
 
-            if (!isProcessing) {
-                isProcessing = true;
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            isProcessing = true;
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const frame = canvas.toDataURL("image/jpeg", 0.4).split(',')[1];
-                ws.send(frame);
-            }
-
-            // Kiểm tra nếu không có frame nào được gửi trong 5s, reset WebSocket
-            if (Date.now() - lastFrameTime > 5000) {
-                console.warn("🛑 Không gửi frame nào trong 5s, khởi động lại WebSocket!");
-                ws.close();
-                connectWebSocket();
-            }
+            const frame = canvas.toDataURL("image/jpeg", 0.5).split(',')[1];
+            ws.send(frame);
         }
 
         function sendFrameLoop() {
@@ -171,8 +154,7 @@
         }
 
         cameraSelect.addEventListener("change", () => {
-            console.log("🔄 Đổi camera, dừng vòng lặp hiện tại...");
-            cancelAnimationFrame(animationFrameId);
+            console.log("🔄 Đổi camera, dừng gửi frame...");
             startCamera(cameraSelect.value);
         });
 
