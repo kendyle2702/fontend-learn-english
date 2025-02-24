@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YOLOv8 Inference Streaming</title>
+    <title>Learn English With Object Detection</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -28,7 +28,7 @@
 </head>
 <body>
 
-    <h2>Camera Live & Inference với YOLOv8</h2>
+    <h2>Learn English With Object Detection</h2>
 
     <label for="cameraSelect">Chọn Camera:</label>
     <select id="cameraSelect"></select>
@@ -119,7 +119,7 @@
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const frame = canvas.toDataURL("image/jpeg", 0.5).split(',')[1];
+                const frame = canvas.toDataURL("image/jpeg", 0.4).split(',')[1];
                 ws.send(frame);
             }
         }
