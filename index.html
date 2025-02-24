@@ -10,7 +10,7 @@
             text-align: center;
             margin: 20px;
         }
-        video {
+        video{
             width: 100%;
             max-width: 600px;
             border: 2px solid #ccc;
@@ -31,7 +31,6 @@
     <h2>Camera Live & Inference với YOLOv8</h2>
 
     <label for="cameraSelect">Chọn Camera:</label>
-    <!-- <p id="log"></p> -->
     <select id="cameraSelect"></select>
 
     <video id="video" autoplay playsinline></video>
@@ -45,29 +44,27 @@
         const cameraSelect = document.getElementById('cameraSelect');
         const ctx = canvas.getContext('2d');
 
-        const log = document.getElementById('log');
-
         let currentStream = null;
         let ws = null;
+        let isProcessing = false; // Tránh gửi frame khi chưa có phản hồi
 
-        // ✅ Kết nối WebSocket đến backend FastAPI
         function connectWebSocket() {
             ws = new WebSocket("wss://27c2-115-74-210-164.ngrok-free.app/ws");
 
             ws.onopen = () => console.log("✅ WebSocket Connected");
 
-            ws.onerror = (error) => {console.error("❌ WebSocket Error:", error);
+            ws.onerror = (error) => {
+                console.error("❌ WebSocket Error:", error);
                 alert("Không thể kết nối đến backend. Vui lòng thử lại sau!");
             };
 
             // Nhận kết quả inference từ backend
             ws.onmessage = (event) => {
                 resultImg.src = "data:image/jpeg;base64," + event.data;
-                // log.append("🔥 Inference: " + event.data + "\n");
+                isProcessing = false; // Đánh dấu đã nhận kết quả, cho phép gửi frame mới
             };
         }
 
-        // ✅ Lấy danh sách camera và ưu tiên camera sau trên điện thoại
         async function getCameras() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -81,7 +78,6 @@
                     cameraSelect.appendChild(option);
                 });
 
-                // Chọn camera sau nếu có
                 const backCamera = videoDevices.find(device => device.label.toLowerCase().includes("back"));
                 startCamera(backCamera ? backCamera.deviceId : videoDevices[0]?.deviceId);
             } catch (error) {
@@ -90,9 +86,7 @@
             }
         }
 
-        // ✅ Mở camera
         async function startCamera(deviceId) {
-            // Dừng stream hiện tại trước khi mở stream mới
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
@@ -110,8 +104,7 @@
                 video.srcObject = stream;
                 currentStream = stream;
 
-                // ✅ Khi camera sẵn sàng, gửi frame liên tục
-                video.onloadedmetadata = () => sendFrame();
+                video.onloadedmetadata = () => sendFrameLoop();
 
             } catch (error) {
                 console.error("❌ Lỗi khi truy cập camera:", error);
@@ -119,10 +112,9 @@
             }
         }
 
-        // ✅ Gửi frame lên backend liên tục
         function sendFrame() {
-            if (ws.readyState === WebSocket.OPEN) {
-                // log.append("🔥 Inference: " + video.videoWidth + "\n");
+            if (ws.readyState === WebSocket.OPEN && !isProcessing) {
+                isProcessing = true;
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -130,15 +122,17 @@
                 const frame = canvas.toDataURL("image/jpeg", 0.7).split(',')[1];
                 ws.send(frame);
             }
-            requestAnimationFrame(sendFrame);
         }
 
-        // ✅ Khi chọn camera khác, đổi camera
+        function sendFrameLoop() {
+            sendFrame();
+            requestAnimationFrame(sendFrameLoop);
+        }
+
         cameraSelect.addEventListener("change", () => {
             startCamera(cameraSelect.value);
         });
 
-        // ✅ Kiểm tra quyền camera & lấy danh sách
         navigator.mediaDevices.getUserMedia({ video: true })
             .then(() => {
                 getCameras();
@@ -146,7 +140,7 @@
             })
             .catch(error => {
                 console.error("❌ Lỗi quyền camera:", error);
-                alert("Bạn cần cấp quyền truy cập camera trong cài đặt trình duyệt.");
+                alert("Bạn cần cấp quyền truy cập camera.");
             });
 
     </script>
