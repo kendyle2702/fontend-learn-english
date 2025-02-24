@@ -119,7 +119,7 @@
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const frame = canvas.toDataURL("image/jpeg", 0.7).split(',')[1];
+                const frame = canvas.toDataURL("image/jpeg", 0.5).split(',')[1];
                 ws.send(frame);
             }
         }
