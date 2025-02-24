@@ -57,9 +57,10 @@
         let ws = null;
         let isProcessing = false;
         let animationFrameId = null;
+        let lastFrameTime = Date.now();  // Theo dõi thời gian gửi frame cuối cùng
 
         function connectWebSocket() {
-            ws = new WebSocket("wss://27c2-115-74-210-164.ngrok-free.app/ws");
+            ws = new WebSocket("wss://your-backend-url/ws");
 
             ws.onopen = () => console.log("✅ WebSocket Connected");
 
@@ -72,6 +73,7 @@
             ws.onmessage = (event) => {
                 resultImg.src = "data:image/jpeg;base64," + event.data;
                 isProcessing = false;
+                lastFrameTime = Date.now();
             };
         }
 
@@ -125,10 +127,11 @@
                 video.srcObject = stream;
                 currentStream = stream;
 
-                video.onloadedmetadata = () => {
+                // Đợi camera khởi động trước khi gửi frame
+                setTimeout(() => {
                     if (animationFrameId) cancelAnimationFrame(animationFrameId);
                     sendFrameLoop();
-                };
+                }, 500); // Chờ 500ms để tránh lỗi camera bị đứng
 
             } catch (error) {
                 console.error("❌ Lỗi khi truy cập camera:", error);
@@ -137,7 +140,14 @@
         }
 
         function sendFrame() {
-            if (ws.readyState === WebSocket.OPEN && !isProcessing) {
+            // Kiểm tra nếu WebSocket bị mất kết nối, tự động kết nối lại
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.warn("🔄 WebSocket không hoạt động, kết nối lại...");
+                connectWebSocket();
+                return;
+            }
+
+            if (!isProcessing) {
                 isProcessing = true;
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -145,6 +155,13 @@
 
                 const frame = canvas.toDataURL("image/jpeg", 0.4).split(',')[1];
                 ws.send(frame);
+            }
+
+            // Kiểm tra nếu không có frame nào được gửi trong 5s, reset WebSocket
+            if (Date.now() - lastFrameTime > 5000) {
+                console.warn("🛑 Không gửi frame nào trong 5s, khởi động lại WebSocket!");
+                ws.close();
+                connectWebSocket();
             }
         }
 
@@ -154,6 +171,8 @@
         }
 
         cameraSelect.addEventListener("change", () => {
+            console.log("🔄 Đổi camera, dừng vòng lặp hiện tại...");
+            cancelAnimationFrame(animationFrameId);
             startCamera(cameraSelect.value);
         });
 
