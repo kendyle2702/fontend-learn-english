@@ -10,18 +10,14 @@
             text-align: center;
             margin: 20px;
         }
-        video{
-            /* width: 100%;
-            max-width: 600px;
-            border: 2px solid #ccc;
-            border-radius: 10px; */
+        /* Ẩn video nhưng vẫn chạy để lấy frame */
+        video {
             position: absolute;
             width: 1px;
             height: 1px;
             opacity: 0;
             pointer-events: none;
         }
-        
         select, button {
             margin-top: 10px;
             padding: 10px;
@@ -29,6 +25,13 @@
         }
         canvas {
             display: none;
+        }
+        img {
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #ccc;
+            border-radius: 10px;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -39,9 +42,9 @@
     <label for="cameraSelect">Chọn Camera:</label>
     <select id="cameraSelect"></select>
 
-    <video id="video" autoplay playsinline></video>
+    <video id="video" autoplay playsinline></video>  <!-- Video bị ẩn nhưng vẫn chạy -->
     <canvas id="canvas"></canvas>
-    <img id="result" alt="Kết quả inference" style="display:block; margin-top:10px; border: 1px solid #ccc; max-width:100%;">
+    <img id="result" alt="Kết quả inference">
 
     <script>
         const video = document.getElementById('video');
@@ -53,6 +56,7 @@
         let currentStream = null;
         let ws = null;
         let isProcessing = false; // Tránh gửi frame khi chưa có phản hồi
+        let animationFrameId = null; // ID của requestAnimationFrame để dừng vòng lặp
 
         function connectWebSocket() {
             ws = new WebSocket("wss://27c2-115-74-210-164.ngrok-free.app/ws");
@@ -67,7 +71,7 @@
             // Nhận kết quả inference từ backend
             ws.onmessage = (event) => {
                 resultImg.src = "data:image/jpeg;base64," + event.data;
-                isProcessing = false; // Đánh dấu đã nhận kết quả, cho phép gửi frame mới
+                isProcessing = false; // Cho phép gửi frame mới
             };
         }
 
@@ -110,7 +114,10 @@
                 video.srcObject = stream;
                 currentStream = stream;
 
-                video.onloadedmetadata = () => sendFrameLoop();
+                video.onloadedmetadata = () => {
+                    if (animationFrameId) cancelAnimationFrame(animationFrameId); // Dừng vòng lặp cũ
+                    sendFrameLoop(); // Bắt đầu vòng lặp mới
+                };
 
             } catch (error) {
                 console.error("❌ Lỗi khi truy cập camera:", error);
@@ -132,7 +139,7 @@
 
         function sendFrameLoop() {
             sendFrame();
-            requestAnimationFrame(sendFrameLoop);
+            animationFrameId = requestAnimationFrame(sendFrameLoop);
         }
 
         cameraSelect.addEventListener("change", () => {
