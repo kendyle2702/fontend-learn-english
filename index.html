@@ -366,6 +366,7 @@
                     isCameraStable = true;
                     statusMessage.textContent = "Camera đã sẵn sàng. Đang nhận diện...";
                     sendFrameLoop();
+                    loadingSpinner.style.display = "none";
                 }, 1000);
 
             } catch (error) {
