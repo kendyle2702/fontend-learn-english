@@ -263,7 +263,7 @@
             statusMessage.textContent = "Đang kết nối đến máy chủ...";
             statusIndicator.className = "status-indicator";
 
-            ws = new WebSocket("https://26b5-58-187-138-232.ngrok-free.app");
+            ws = new WebSocket("wss://26b5-58-187-138-232.ngrok-free.app/ws");
 
             ws.onopen = () => {
                 console.log("✅ WebSocket Connected");
