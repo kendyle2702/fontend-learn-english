@@ -176,25 +176,7 @@
             }
         }
         
-        .detected-objects {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: var(--secondary-color);
-            border-radius: var(--border-radius);
-        }
-        
-        .detected-objects h3 {
-            color: var(--primary-color);
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        
-        .object-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            justify-content: center;
-        }
+
         
         .object-item {
             background-color: white;
@@ -256,12 +238,6 @@
             <div id="statusMessage" class="status-message">Đang kết nối...</div>
         </div>
         
-        <div class="detected-objects" id="detectedObjects">
-            <h3>Các vật thể đã nhận diện</h3>
-            <div class="object-list" id="objectList">
-                <!-- Danh sách đối tượng sẽ được thêm vào đây bằng JavaScript -->
-            </div>
-        </div>
     </div>
 
     <video id="video" autoplay playsinline></video>  <!-- Video bị ẩn nhưng vẫn chạy -->
@@ -276,14 +252,12 @@
         const statusIndicator = document.getElementById('statusIndicator');
         const statusMessage = document.getElementById('statusMessage');
         const loadingSpinner = document.getElementById('loadingSpinner');
-        const objectList = document.getElementById('objectList');
 
         let currentStream = null;
         let ws = null;
         let isProcessing = false;
         let animationFrameId = null;
         let isCameraStable = false; // Kiểm tra xem camera đã sẵn sàng chưa
-        let detectedObjects = []; // Danh sách các đối tượng đã nhận diện
 
         function connectWebSocket() {
             statusMessage.textContent = "Đang kết nối đến máy chủ...";
@@ -295,18 +269,20 @@
                 console.log("✅ WebSocket Connected");
                 statusIndicator.className = "status-indicator connected";
                 statusMessage.textContent = "Đã kết nối! Đang nhận diện vật thể...";
+                loadingSpinner.style.display = "none";
             };
 
             ws.onerror = (error) => {
                 console.error("❌ WebSocket Error:", error);
                 statusIndicator.className = "status-indicator disconnected";
                 statusMessage.textContent = "Không thể kết nối đến máy chủ. Vui lòng thử lại sau!";
+                loadingSpinner.style.display = "block";
             };
 
             ws.onclose = () => {
                 statusIndicator.className = "status-indicator disconnected";
                 statusMessage.textContent = "Kết nối đã bị đóng. Đang thử kết nối lại...";
-                
+                loadingSpinner.style.display = "block";
                 // Thử kết nối lại sau 5 giây
                 setTimeout(connectWebSocket, 5000);
             };
@@ -323,41 +299,14 @@
                         resultImg.src = "data:image/jpeg;base64," + event.data;
                     }
                     
-                    // Cập nhật danh sách đối tượng nếu có
-                    if (data.objects) {
-                        updateDetectedObjects(data.objects);
-                    }
                 } catch (e) {
                     // Nếu dữ liệu không phải JSON, giả định đó là hình ảnh trực tiếp
                     resultImg.src = "data:image/jpeg;base64," + event.data;
                 }
-                
-                loadingSpinner.style.display = "none";
                 isProcessing = false;
             };
         }
 
-        function updateDetectedObjects(objects) {
-            detectedObjects = objects;
-            objectList.innerHTML = '';
-            
-            objects.forEach(obj => {
-                const objectItem = document.createElement('div');
-                objectItem.className = 'object-item';
-                
-                const objectName = document.createElement('span');
-                objectName.className = 'object-name';
-                objectName.textContent = obj.name || obj.label;
-                
-                const objectTranslation = document.createElement('span');
-                objectTranslation.className = 'object-translation';
-                objectTranslation.textContent = obj.translation || `(${obj.confidence.toFixed(2)})`;
-                
-                objectItem.appendChild(objectName);
-                objectItem.appendChild(objectTranslation);
-                objectList.appendChild(objectItem);
-            });
-        }
 
         async function getCameras() {
             try {
@@ -374,9 +323,8 @@
 
                 // Ưu tiên camera sau nếu có
                 const backCamera = videoDevices.find(device => 
-                    device.label.toLowerCase().includes("back") || 
-                    device.label.toLowerCase().includes("sau") ||
-                    device.label.toLowerCase().includes("rear")
+                device.label.toLowerCase().includes("front") ||
+                device.label.toLowerCase().includes("trước")
                 );
                 startCamera(backCamera ? backCamera.deviceId : videoDevices[0]?.deviceId);
             } catch (error) {
@@ -423,7 +371,7 @@
             } catch (error) {
                 console.error("❌ Lỗi khi truy cập camera:", error);
                 statusMessage.textContent = "Không thể truy cập camera. Kiểm tra quyền hoặc thử trình duyệt khác!";
-                loadingSpinner.style.display = "none";
+                loadingSpinner.style.display = "block";
             }
         }
 
@@ -434,13 +382,12 @@
             }
 
             isProcessing = true;
-            loadingSpinner.style.display = "block";
             
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            const frame = canvas.toDataURL("image/jpeg", 0.5).split(',')[1];
+            const frame = canvas.toDataURL("image/jpeg", 0.4).split(',')[1];
             ws.send(frame);
         }
 
